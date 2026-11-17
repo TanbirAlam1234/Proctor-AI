@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ProctorAI — Flask Backend (Starter)
 
 A working Flask + SQLite backend for your AI Exam Proctoring project, with real
@@ -127,3 +128,6 @@ explains black / frozen / no-face pictures.
 **Needs internet** (face-api.js and its models load from jsDelivr; ~7 MB the first time).
 Limits: this is face *matching*, not liveness detection - a printed photo or a screen showing the
 student's photo could fool it. Treat it as one layer alongside the live monitoring.
+=======
+# Proctor-AI
+>>>>>>> ca3616062b3f971262e0e787afb892ecf660b7d7
