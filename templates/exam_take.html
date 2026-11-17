@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProctorAI — {{ exam['title'] }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .topbar{ height:54px; border-bottom:1px solid var(--line); background:var(--surface); display:flex; align-items:center; justify-content:space-between; padding:0 22px; }
+  .exam-status{ display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--safe); background:rgba(47,224,176,.08); border:1px solid rgba(47,224,176,.3); padding:5px 12px; border-radius:20px; }
+  .exam-status .dot{ width:6px; height:6px; border-radius:50%; background:var(--safe); animation:pulse 1.6s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  .exam-timer{ font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:600; }
+
+  .exam-body{ max-width:640px; margin:0 auto; padding:34px 22px; }
+  .q-eyebrow{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--scan); margin-bottom:16px; }
+  .question-block{ margin-bottom:32px; padding-bottom:28px; border-bottom:1px solid var(--line); }
+  .question-block:last-of-type{ border-bottom:none; }
+  .q-number{ font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-muted); margin-bottom:8px; }
+  .q-text{ font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:600; margin-bottom:16px; }
+  .options{ display:flex; flex-direction:column; gap:10px; }
+  .option{ display:flex; align-items:center; gap:12px; padding:14px 16px; border:1px solid var(--line); border-radius:9px; cursor:pointer; background:var(--surface); }
+  .option:hover{ border-color:var(--scan); }
+  .option input{ accent-color:var(--scan); width:16px; height:16px; }
+  .option-letter{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted); width:18px; }
+
+  .no-questions{ background:rgba(245,166,35,.06); border:1px solid rgba(245,166,35,.3); border-radius:10px; padding:16px 18px; margin-bottom:24px; }
+  .no-q-title{ font-weight:600; font-size:13.5px; color:var(--warn); }
+  .no-q-sub{ font-size:12px; color:var(--text-muted); margin-top:6px; line-height:1.5; }
+
+  .fs-warning{ display:none; align-items:center; gap:8px; background:rgba(255,84,104,.1); border:1px solid rgba(255,84,104,.35); color:var(--alert); padding:10px 14px; border-radius:8px; font-size:12px; margin-bottom:20px; }
+  .fs-warning.show{ display:flex; }
+
+  .face-monitor{
+    position:fixed; bottom:20px; right:20px; width:170px;
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    overflow:hidden; z-index:50; box-shadow:0 4px 20px rgba(0,0,0,.3);
+  }
+  .face-monitor video{ width:100%; height:126px; object-fit:cover; display:block; background:#0E1526; transform:scaleX(-1); }
+  .monitor-row{
+    display:flex; align-items:center; gap:6px; padding:7px 10px;
+    font-family:'JetBrains Mono',monospace; font-size:10px; border-top:1px solid var(--line);
+  }
+  .monitor-row:first-of-type{ border-top:none; }
+  .monitor-row .dot{ width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .monitor-row.ok{ color:var(--safe); }
+  .monitor-row.ok .dot{ background:var(--safe); animation:pulse 1.6s infinite; }
+  .monitor-row.bad{ color:var(--alert); }
+  .monitor-row.bad .dot{ background:var(--alert); animation:pulse 1.6s infinite; }
+  .monitor-row.pending{ color:var(--text-muted); }
+  .monitor-row.pending .dot{ background:var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><div class="brand-mark"></div><div class="brand-name">ProctorAI</div></div>
+    <div class="exam-status"><span class="dot"></span>PROCTORING ACTIVE — VERIFIED</div>
+    <div class="exam-timer" id="timer">{{ exam['duration_minutes'] }}:00</div>
+  </div>
+
+  <div class="exam-body">
+    <div class="fs-warning" id="fs-warning">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+      You exited full-screen. This has been logged. Return to full-screen to continue.
+    </div>
+
+    <div class="q-eyebrow">{{ exam['title'] }}{% if questions %} — {{ questions|length }} QUESTION{{ 's' if questions|length != 1 else '' }}{% endif %}</div>
+
+    {% if not questions %}
+      <div class="no-questions">
+        <div class="no-q-title">No questions have been added to this exam yet</div>
+        <div class="no-q-sub">Ask your instructor to add questions before this exam can be attempted properly. You can still submit, but it will be scored 0.</div>
+      </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('exam_submit', exam_id=exam['id']) }}" onsubmit="return confirm('Submit the exam now? You cannot change your answers after this.');">
+      {% for q in questions %}
+      <div class="question-block">
+        <div class="q-number">QUESTION {{ loop.index }} OF {{ questions|length }} · {{ q['marks'] }} mark{{ 's' if q['marks'] != 1 else '' }}</div>
+        <div class="q-text">{{ q['question_text'] }}</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="q_{{ q['id'] }}" value="a"><span class="option-letter">A</span> {{ q['option_a'] }}</label>
+          <label class="option"><input type="radio" name="q_{{ q['id'] }}" value="b"><span class="option-letter">B</span> {{ q['option_b'] }}</label>
+          <label class="option"><input type="radio" name="q_{{ q['id'] }}" value="c"><span class="option-letter">C</span> {{ q['option_c'] }}</label>
+          <label class="option"><input type="radio" name="q_{{ q['id'] }}" value="d"><span class="option-letter">D</span> {{ q['option_d'] }}</label>
+        </div>
+      </div>
+      {% endfor %}
+
+      <button type="submit" class="btn btn-safe btn-block">Submit Exam</button>
+    </form>
+  </div>
+
+  <!-- Live proctoring monitor: shared webcam feed, two real detection models -->
+  <div class="face-monitor">
+    <video id="monitor-video" autoplay playsinline muted></video>
+    <div class="monitor-row pending" id="face-status-row">
+      <span class="dot"></span><span id="face-status-text">Starting face monitor…</span>
+    </div>
+    <div class="monitor-row pending" id="object-status-row">
+      <span class="dot"></span><span id="object-status-text">Starting object monitor…</span>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<script>
+  // Re-request fullscreen on load; warn (don't silently allow) if the student exits it.
+  function onFsChange(){
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    document.getElementById('fs-warning').classList.toggle('show', !isFs);
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+
+  // Simple countdown timer, demo purposes.
+  let secondsLeft = {{ exam['duration_minutes'] }} * 60;
+  setInterval(()=>{
+    if(secondsLeft <= 0) return;
+    secondsLeft--;
+    const m = String(Math.floor(secondsLeft/60)).padStart(2,'0');
+    const s = String(secondsLeft%60).padStart(2,'0');
+    document.getElementById('timer').textContent = m+':'+s;
+  }, 1000);
+
+  // ===========================================================================
+  // REAL continuous proctoring monitors — run for the whole exam.
+  // Face detection: face-api.js (TensorFlow.js under the hood).
+  // Object detection: TensorFlow.js + COCO-SSD (Google's pretrained object
+  // detector — the practical browser-based equivalent of "YOLO" for this use
+  // case; it recognizes 80 everyday object classes, including phones/books).
+  // Both need an internet connection to fetch the library + model files.
+  // NOTE: loading two libraries that each ship TensorFlow.js can print a
+  // harmless "TensorFlow.js already loaded" warning in the console — that's
+  // not a real error, just tfjs being defensive about double-registration.
+  // ===========================================================================
+  const LOG_VIOLATION_URL = "{{ url_for('exam_log_violation', exam_id=exam['id']) }}";
+  const FACE_MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
+  const DETECT_INTERVAL_MS = 2000;   // how often we check the frame
+  const LOG_COOLDOWN_MS = 15000;     // don't spam the DB — re-log a persisting problem at most every 15s
+
+  // Object classes COCO-SSD can recognize that matter for exam integrity, with severity per class.
+  const PROHIBITED_CLASSES = { 'cell phone': 'High', 'book': 'Medium', 'laptop': 'Medium', 'tv': 'Medium', 'remote': 'Low' };
+  const OBJECT_CONFIDENCE_THRESHOLD = 0.55;
+
+  let monitorStream = null;
+  let cocoModel = null;
+  let lastFaceState = null;          // 'none' | 'multiple' | null
+  let lastFaceLoggedAt = 0;
+  let objectCooldowns = {};          // class name -> last time we logged it
+
+  function setStatusRow(rowId, textId, kind, text){
+    document.getElementById(rowId).className = 'monitor-row ' + kind;
+    document.getElementById(textId).textContent = text;
+  }
+
+  // Grab a real frame from the live webcam feed as evidence, downsized to keep it small.
+  function captureSnapshot(video){
+    try{
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 180;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', 0.6);
+    }catch(err){
+      return null; // e.g. video not ready yet — log the violation without evidence rather than failing
+    }
+  }
+
+  async function logViolation(module, event, severity, video){
+    const snapshot = video ? captureSnapshot(video) : null;
+    try{
+      await fetch(LOG_VIOLATION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module, event, severity, snapshot })
+      });
+    }catch(err){ /* best-effort — don't interrupt the exam if logging fails */ }
+  }
+
+  async function startProctorMonitor(){
+    const video = document.getElementById('monitor-video');
+
+    try{
+      setStatusRow('face-status-row', 'face-status-text', 'pending', 'Loading face model…');
+      setStatusRow('object-status-row', 'object-status-text', 'pending', 'Loading object model…');
+
+      const [_, loadedCocoModel] = await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+        cocoSsd.load()
+      ]);
+      cocoModel = loadedCocoModel;
+
+      const savedCam = sessionStorage.getItem('proctor_camera_id');   // camera chosen on the System Check page
+      monitorStream = await navigator.mediaDevices.getUserMedia({ video: savedCam ? { deviceId: { ideal: savedCam } } : true, audio: false });
+      video.srcObject = monitorStream;
+      await video.play();
+
+      setStatusRow('face-status-row', 'face-status-text', 'ok', 'Face monitor active');
+      setStatusRow('object-status-row', 'object-status-text', 'ok', 'Object monitor active');
+
+      setInterval(() => {
+        checkFacePresence(video);
+        checkObjects(video);
+      }, DETECT_INTERVAL_MS);
+
+    }catch(err){
+      setStatusRow('face-status-row', 'face-status-text', 'bad', 'Monitor unavailable');
+      setStatusRow('object-status-row', 'object-status-text', 'bad', 'Monitor unavailable');
+      logViolation('Face Detection', 'Proctoring camera/model unavailable: ' + err.message, 'High', null);
+    }
+  }
+
+  async function checkFacePresence(video){
+    if(video.readyState < 2) return;
+    let detections;
+    try{
+      detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+    }catch(err){ return; }
+
+    const count = detections.length;
+    const now = Date.now();
+
+    if(count === 1){
+      setStatusRow('face-status-row', 'face-status-text', 'ok', 'Face detected');
+      lastFaceState = null;
+      return;
+    }
+    if(count === 0){
+      setStatusRow('face-status-row', 'face-status-text', 'bad', 'No face detected');
+      if(lastFaceState !== 'none' || (now - lastFaceLoggedAt) > LOG_COOLDOWN_MS){
+        logViolation('Face Detection', 'No face visible in frame', 'High', video);
+        lastFaceState = 'none'; lastFaceLoggedAt = now;
+      }
+      return;
+    }
+    setStatusRow('face-status-row', 'face-status-text', 'bad', count + ' faces detected');
+    if(lastFaceState !== 'multiple' || (now - lastFaceLoggedAt) > LOG_COOLDOWN_MS){
+      logViolation('Face Detection', count + ' faces detected in frame', 'High', video);
+      lastFaceState = 'multiple'; lastFaceLoggedAt = now;
+    }
+  }
+
+  async function checkObjects(video){
+    if(!cocoModel || video.readyState < 2) return;
+    let predictions;
+    try{
+      predictions = await cocoModel.detect(video);
+    }catch(err){ return; }
+
+    const now = Date.now();
+    const flagged = predictions.filter(p => PROHIBITED_CLASSES[p.class] && p.score >= OBJECT_CONFIDENCE_THRESHOLD);
+
+    if(flagged.length === 0){
+      setStatusRow('object-status-row', 'object-status-text', 'ok', 'No prohibited items');
+      return;
+    }
+
+    const labels = [...new Set(flagged.map(p => p.class))];
+    setStatusRow('object-status-row', 'object-status-text', 'bad', labels.join(', ') + ' detected');
+
+    for(const p of flagged){
+      const lastLogged = objectCooldowns[p.class] || 0;
+      if((now - lastLogged) > LOG_COOLDOWN_MS){
+        const severity = PROHIBITED_CLASSES[p.class];
+        const confidencePct = Math.round(p.score * 100);
+        logViolation('Object Detection', p.class + ' detected in frame (' + confidencePct + '% confidence)', severity, video);
+        objectCooldowns[p.class] = now;
+      }
+    }
+  }
+
+  // Stop the camera cleanly if the student submits or leaves the page.
+  function stopProctorMonitor(){
+    if(monitorStream){ monitorStream.getTracks().forEach(t => t.stop()); }
+  }
+  window.addEventListener('beforeunload', stopProctorMonitor);
+  document.querySelector('form').addEventListener('submit', stopProctorMonitor);
+
+  startProctorMonitor();
+</script>
+</body>
+</html>

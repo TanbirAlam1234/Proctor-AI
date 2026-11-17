@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProctorAI — System Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<style>
+  body{ display:flex; align-items:center; justify-content:center; padding:24px; }
+  .wrap{ width:100%; max-width:800px; }
+  .head{ text-align:center; margin-bottom:26px; }
+  .head h1{ font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:600; }
+  .head p{ font-size:12.5px; color:var(--text-muted); margin-top:6px; }
+  .grid{ display:grid; grid-template-columns:1fr 1.1fr; gap:22px; align-items:start; }
+
+  .check-list{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .check-item{ display:flex; align-items:center; gap:12px; padding:14px 12px; border-bottom:1px solid var(--line); }
+  .check-item:last-child{ border-bottom:none; }
+  .check-icon{ width:34px; height:34px; border-radius:8px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .check-icon svg{ width:17px; height:17px; color:var(--text-muted); }
+  .check-item.done .check-icon{ background:rgba(47,224,176,.12); }
+  .check-item.done .check-icon svg{ color:var(--safe); }
+  .check-item.error .check-icon{ background:rgba(255,84,104,.12); }
+  .check-item.error .check-icon svg{ color:var(--alert); }
+  .check-body{ flex:1; min-width:0; }
+  .check-name{ font-weight:600; font-size:13px; }
+  .check-status{ font-size:11px; color:var(--text-muted); margin-top:2px; font-family:'JetBrains Mono',monospace; line-height:1.45; }
+  .check-item.done .check-status{ color:var(--safe); }
+  .check-item.error .check-status{ color:var(--alert); }
+  .check-action{ flex-shrink:0; }
+  .mini-btn{ all:unset; cursor:pointer; font-size:11px; font-weight:600; padding:6px 12px; border-radius:6px; background:var(--scan); color:#06121F; }
+  .mini-btn:disabled{ background:var(--line); color:var(--text-muted); cursor:not-allowed; }
+  .spinner{ width:16px; height:16px; border:2px solid var(--line); border-top-color:var(--scan); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .check-state-icon{ width:18px; height:18px; flex-shrink:0; }
+
+  .cam-preview{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .cam-frame{ position:relative; aspect-ratio:4/3; border-radius:8px; overflow:hidden; background:linear-gradient(160deg,#1A2338,#0E1526); }
+  .cam-frame video{ width:100%; height:100%; object-fit:cover; transform:scaleX(-1); display:none; }
+  .cam-frame .silhouette{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#2A3550; }
+  .cam-frame .silhouette svg{ width:80px; height:80px; }
+  .bracket{ position:absolute; width:20px; height:20px; z-index:2; }
+  .bracket svg{ width:100%; height:100%; }
+  .bracket.tl{ top:8px; left:8px; } .bracket.tr{ top:8px; right:8px; transform:scaleX(-1); }
+  .bracket.bl{ bottom:8px; left:8px; transform:scaleY(-1); } .bracket.br{ bottom:8px; right:8px; transform:scale(-1,-1); }
+  .scanline{ position:absolute; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--scan),transparent); opacity:.55; animation:scan 3s linear infinite; z-index:2; }
+  @keyframes scan{ 0%{top:4%;} 100%{top:94%;} }
+  .cam-caption{ text-align:center; font-size:11.5px; color:var(--text-muted); margin-top:10px; }
+  .cam-caption strong{ color:var(--safe); }
+
+  .cam-select-wrap{ margin-top:12px; display:none; }
+  .cam-select-wrap label{ display:block; font-size:10.5px; color:var(--text-muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.05em; }
+  .cam-select-wrap select{ width:100%; background:var(--ink); color:var(--text); border:1px solid var(--line); border-radius:7px; padding:8px 10px; font-size:12px; font-family:'Inter',sans-serif; }
+  .diag{ display:none; margin-top:12px; padding:11px 13px; border-radius:8px; background:rgba(245,166,35,.07); border:1px solid rgba(245,166,35,.3); font-size:11.5px; line-height:1.55; color:var(--text-muted); }
+  .diag.show{ display:block; }
+  .diag strong{ color:var(--warn); }
+  .diag.info{ background:rgba(79,195,247,.07); border-color:rgba(79,195,247,.3); }
+  .diag.info strong{ color:var(--scan); }
+
+  .actions{ text-align:center; margin-top:24px; }
+  .hint{ font-size:11.5px; color:var(--text-muted); margin-top:10px; }
+  .server-error{ display:none; margin-top:14px; padding:11px 13px; background:rgba(255,84,104,.08); border:1px solid rgba(255,84,104,.3); border-radius:8px; color:var(--alert); font-size:12px; }
+  .server-error.show{ display:block; }
+  @media (max-width:760px){ .grid{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>System Check</h1>
+    <p>{{ exam['title'] }} — complete all 3 checks below before the exam unlocks</p>
+  </div>
+
+  <div class="grid">
+    <div class="check-list">
+      <div class="check-item" id="item-face">
+        <div class="check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3"/><path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg></div>
+        <div class="check-body"><div class="check-name">Camera &amp; Face Detection</div><div class="check-status" id="face-status">Click Start Camera to begin</div></div>
+        <div class="check-action" id="face-action"><button class="mini-btn" onclick="startCamera()">Start Camera</button></div>
+      </div>
+
+      <div class="check-item" id="item-fullscreen">
+        <div class="check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg></div>
+        <div class="check-body"><div class="check-name">Full-Screen Mode</div><div class="check-status" id="fullscreen-status">Required for the entire exam</div></div>
+        <div class="check-action" id="fs-action"><button class="mini-btn" onclick="enableFullscreen()">Enable</button></div>
+      </div>
+
+      <div class="check-item" id="item-id">
+        <div class="check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M13 10h5M13 14h5M6 14h1"/></svg></div>
+        <div class="check-body"><div class="check-name">ID Photo Match</div><div class="check-status" id="id-status">Compares your face with your registered ID photo</div></div>
+        <div class="check-action" id="id-action"><button class="mini-btn" id="id-btn" onclick="verifyIdentity()" disabled>Verify</button></div>
+      </div>
+    </div>
+
+    <div class="cam-preview">
+      <div class="cam-frame">
+        <div class="silhouette" id="cam-silhouette"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></div>
+        <video id="cam-video" autoplay playsinline muted></video>
+        <div class="scanline"></div>
+        <span class="bracket tl"><svg viewBox="0 0 16 16" fill="none" stroke="#4FC3F7" stroke-width="2"><path d="M1 6V1h5"/></svg></span>
+        <span class="bracket tr"><svg viewBox="0 0 16 16" fill="none" stroke="#4FC3F7" stroke-width="2"><path d="M1 6V1h5"/></svg></span>
+        <span class="bracket bl"><svg viewBox="0 0 16 16" fill="none" stroke="#4FC3F7" stroke-width="2"><path d="M1 6V1h5"/></svg></span>
+        <span class="bracket br"><svg viewBox="0 0 16 16" fill="none" stroke="#4FC3F7" stroke-width="2"><path d="M1 6V1h5"/></svg></span>
+      </div>
+      <div class="cam-caption" id="cam-caption">Your live camera appears here</div>
+
+      <div class="cam-select-wrap" id="cam-select-wrap">
+        <label for="cam-select">Camera in use</label>
+        <select id="cam-select" onchange="onCameraChange()"></select>
+      </div>
+      <div class="diag" id="diag"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-safe" id="begin-btn" disabled onclick="submitVerification()">Begin Exam</button>
+    <div class="hint">Your identity is matched on the server — the exam cannot be opened without it.</div>
+    <div class="server-error" id="server-error"></div>
+  </div>
+</div>
+
+<script>
+  const VERIFY_URL = "{{ url_for('exam_verify', exam_id=exam['id']) }}";
+  const VERIFY_ID_URL = "{{ url_for('exam_verify_id', exam_id=exam['id']) }}";
+  const HAS_REFERENCE = {{ 'true' if has_reference else 'false' }};
+  const ALLOW_FIRST_USE = {{ 'true' if allow_first_use else 'false' }};
+  const FACE_MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
+  // Camera names that usually mean a phone or software camera instead of the laptop's own webcam.
+  const VIRTUAL_CAM = /phone|cross.?device|camo|droidcam|iriun|epoccam|\bobs\b|virtual|\bndi\b|snap camera|manycam|xsplit|continuity/i;
+  const CHECK_SVG = '<svg class="check-state-icon" viewBox="0 0 24 24" fill="none" stroke="#2FE0B0" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>';
+
+  let stream = null, pollTimer = null, modelsReady = false, diagRunning = false;
+  let faceOk = false, fullscreenOk = false, idOk = false, idBlocked = false;
+  let faceStreak = 0, lookingSince = 0;
+
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function setItem(key, state, text){
+    const el = $('item-' + key);
+    el.classList.remove('done', 'error');
+    if(state) el.classList.add(state);
+    $(key + '-status').textContent = text;
+  }
+  function setAction(key, html){ $(key + '-action').innerHTML = html; }
+  function updateBeginButton(){ $('begin-btn').disabled = !(faceOk && fullscreenOk && idOk); }
+  function showDiag(html, kind){ const d = $('diag'); d.innerHTML = html; d.className = 'diag show' + (kind ? ' ' + kind : ''); }
+  function clearDiag(){ const d = $('diag'); d.className = 'diag'; d.innerHTML = ''; }
+  function camLabel(){ const s = $('cam-select'); return s.selectedOptions.length ? s.selectedOptions[0].textContent : 'this camera'; }
+
+  // ---------------- face models ----------------
+  async function ensureModels(){
+    if(modelsReady) return;
+    if(typeof faceapi === 'undefined') throw new Error('Face recognition library did not load — check your internet connection.');
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL),
+    ]);
+    modelsReady = true;
+  }
+  const detectorOpts = () => new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 });
+
+  // ---------------- camera ----------------
+  function stopStream(){
+    if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+    if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  }
+  async function openCamera(deviceId){
+    stopStream(); faceOk = false; faceStreak = 0; updateBeginButton();
+    stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false });
+    const video = $('cam-video');
+    video.srcObject = stream; video.style.display = 'block'; $('cam-silhouette').style.display = 'none';
+    await video.play();
+    return stream.getVideoTracks()[0];
+  }
+  async function listCameras(){
+    return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  }
+  function renderCameraSelect(cams, activeId){
+    const sel = $('cam-select'); sel.innerHTML = '';
+    cams.forEach((c, i) => {
+      const o = document.createElement('option');
+      o.value = c.deviceId;
+      o.textContent = (c.label || ('Camera ' + (i + 1))) + (VIRTUAL_CAM.test(c.label) ? '  (phone / virtual)' : '');
+      if(c.deviceId === activeId) o.selected = true;
+      sel.appendChild(o);
+    });
+    $('cam-select-wrap').style.display = 'block';
+  }
+  function showCameraError(err){
+    const n = err && err.name; let msg = 'Could not start the camera.';
+    if(n === 'NotAllowedError') msg = 'Camera permission denied — click the camera icon in the address bar, allow it, then retry.';
+    else if(n === 'NotFoundError') msg = 'No camera was found on this device.';
+    else if(n === 'NotReadableError') msg = 'Camera is busy — close other apps using it (Zoom, Teams, Camera app) and retry.';
+    else if(n === 'OverconstrainedError') msg = 'That camera is no longer available — pick another one.';
+    setItem('face', 'error', msg);
+    setAction('face', '<button class="mini-btn" onclick="startCamera()">Retry</button>');
+  }
+
+  async function startCamera(){
+    setItem('face', '', 'Requesting camera permission…');
+    setAction('face', '<div class="spinner"></div>'); clearDiag();
+    try{
+      const saved = sessionStorage.getItem('proctor_camera_id');
+      let track;
+      try{ track = await openCamera(saved); }
+      catch(e){ if(saved){ sessionStorage.removeItem('proctor_camera_id'); track = await openCamera(null); } else throw e; }
+
+      // Camera names are only visible once permission has been granted.
+      const cams = await listCameras();
+      let activeId = track.getSettings().deviceId;
+      const active = cams.find(c => c.deviceId === activeId);
+      let switchedFrom = null;
+
+      // The browser sometimes defaults to a phone / virtual camera. Prefer the laptop's own webcam.
+      if(!saved && active && VIRTUAL_CAM.test(active.label)){
+        const better = cams.find(c => !VIRTUAL_CAM.test(c.label));
+        if(better){ track = await openCamera(better.deviceId); activeId = better.deviceId; switchedFrom = active.label; }
+      }
+      renderCameraSelect(cams, activeId);
+      sessionStorage.setItem('proctor_camera_id', activeId);
+      if(switchedFrom){
+        showDiag('<strong>Switched cameras.</strong> Your browser first picked “' + switchedFrom + '” (a phone/virtual camera), so we switched to “' + camLabel() + '”. You can change this in the list above.', 'info');
+      }
+      await beginFaceDetection();
+    }catch(err){ showCameraError(err); }
+  }
+
+  async function onCameraChange(){
+    const id = $('cam-select').value; clearDiag();
+    setItem('face', '', 'Switching camera…'); setAction('face', '<div class="spinner"></div>');
+    try{
+      await openCamera(id); sessionStorage.setItem('proctor_camera_id', id);
+      await beginFaceDetection();
+    }catch(err){ showCameraError(err); }
+  }
+
+  // ---------------- real face detection ----------------
+  async function beginFaceDetection(){
+    setItem('face', '', 'Loading face models (first time takes a few seconds)…');
+    setAction('face', '<div class="spinner"></div>');
+    try{ await ensureModels(); }
+    catch(e){
+      setItem('face', 'error', e.message || 'Could not load the face models.');
+      setAction('face', '<button class="mini-btn" onclick="startCamera()">Retry</button>');
+      return;
+    }
+    setItem('face', '', 'Looking for your face…');
+    $('cam-caption').textContent = 'Look straight at the camera';
+    faceStreak = 0; lookingSince = Date.now();
+    const video = $('cam-video');
+    if(pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      if(faceOk || video.readyState < 2) return;
+      let dets;
+      try{ dets = await faceapi.detectAllFaces(video, detectorOpts()); }catch(e){ return; }
+
+      if(dets.length === 1){
+        faceStreak++;
+        if(faceStreak >= 3){
+          faceOk = true; clearInterval(pollTimer); clearDiag();
+          setItem('face', 'done', 'One face detected');
+          setAction('face', CHECK_SVG);
+          $('cam-caption').innerHTML = '<strong>Face detected</strong> — now verify against your ID photo';
+          enableIdButton(); updateBeginButton();
+        } else setItem('face', '', 'Face found — hold still…');
+      } else {
+        faceStreak = 0;
+        if(dets.length > 1) setItem('face', '', dets.length + ' faces in frame — only you should be visible');
+        else {
+          setItem('face', '', 'No face found yet…');
+          if(Date.now() - lookingSince > 6000) runDiagnostics(video);
+        }
+      }
+    }, 700);
+  }
+
+  // If no face is found for a while, work out WHY and tell the student in plain words.
+  function sampleGray(video){
+    const w = 64, h = 48, c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(video, 0, 0, w, h);
+    const d = x.getImageData(0, 0, w, h).data, out = new Float32Array(w * h);
+    for(let i = 0, j = 0; i < d.length; i += 4, j++) out[j] = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+    return out;
+  }
+  async function runDiagnostics(video){
+    if(diagRunning) return; diagRunning = true;
+    try{
+      const a = sampleGray(video); await sleep(400); const b = sampleGray(video);
+      let max = 0, diff = 0;
+      for(let i = 0; i < a.length; i++){ if(a[i] > max) max = a[i]; diff += Math.abs(a[i] - b[i]); }
+      diff /= a.length;
+      const cam = '<em>' + camLabel() + '</em>';
+      if(max < 25){
+        showDiag('<strong>The camera is sending a black picture.</strong> Using: ' + cam + '. Check that the lens cover / privacy shutter is open and no other app is using the camera, or pick a different camera in the list above.');
+      } else if(diff < 0.05){
+        showDiag('<strong>The picture is not changing at all.</strong> Using: ' + cam + '. This usually means a phone or virtual camera that isn’t connected (it shows a fixed placeholder image). Pick your laptop’s built-in camera in the list above.');
+      } else {
+        showDiag('<strong>No face found.</strong> Using: ' + cam + '. Face the camera in good light, remove anything covering your face, and make sure this is the camera you want.');
+      }
+    } finally { diagRunning = false; }
+  }
+
+  // ---------------- full-screen ----------------
+  function enableFullscreen(){
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if(req){ const p = req.call(el); if(p && p.catch) p.catch(() => {}); }
+  }
+  function onFullscreenChange(){
+    fullscreenOk = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+    if(fullscreenOk){ setItem('fullscreen', 'done', 'Full-screen mode active'); setAction('fs', CHECK_SVG); }
+    else { setItem('fullscreen', '', 'Required for the entire exam'); setAction('fs', '<button class="mini-btn" onclick="enableFullscreen()">Enable</button>'); }
+    updateBeginButton();
+  }
+  ['fullscreenchange', 'webkitfullscreenchange', 'msfullscreenchange'].forEach(e => document.addEventListener(e, onFullscreenChange));
+
+  // ---------------- ID photo match (decided by the server) ----------------
+  function enableIdButton(){ const b = $('id-btn'); if(b && !idBlocked && faceOk && !idOk) b.disabled = false; }
+  function captureSnapshot(video){
+    try{
+      const c = document.createElement('canvas'); c.width = 240; c.height = 180;
+      c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.6);
+    }catch(e){ return null; }
+  }
+  function idRetry(){ setAction('id', '<button class="mini-btn" id="id-btn" onclick="verifyIdentity()">Retry</button>'); }
+
+  async function verifyIdentity(){
+    const video = $('cam-video');
+    setItem('id', '', 'Capturing your face…'); setAction('id', '<div class="spinner"></div>');
+    try{
+      await ensureModels();
+      const dets = await faceapi.detectAllFaces(video, detectorOpts()).withFaceLandmarks().withFaceDescriptors();
+      if(dets.length !== 1){
+        setItem('id', 'error', dets.length === 0 ? 'No face found — look at the camera and retry' : 'More than one face — only you should be in frame');
+        idRetry(); return;
+      }
+      setItem('id', '', 'Comparing with your ID photo…');
+      const res = await fetch(VERIFY_ID_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descriptor: Array.from(dets[0].descriptor), snapshot: captureSnapshot(video) })
+      });
+      const data = await res.json();
+      if(data.ok){
+        idOk = true;
+        setItem('id', 'done', data.enrolled ? 'First-time enrollment saved as your reference' : 'ID photo matched (distance ' + data.distance + ')');
+        setAction('id', CHECK_SVG); updateBeginButton(); return;
+      }
+      if(data.error === 'mismatch'){
+        setItem('id', 'error', 'Face does not match your ID photo (distance ' + data.distance + '). ' + data.attempts_left + ' attempt(s) left.');
+        idRetry();
+      } else if(data.error === 'no_reference'){
+        idBlocked = true; setItem('id', 'error', 'No ID photo is registered for your account. Ask your instructor to register one.'); setAction('id', '');
+      } else if(data.error === 'too_many_attempts'){
+        idBlocked = true; setItem('id', 'error', 'Too many failed attempts. Contact your instructor.'); setAction('id', '');
+      } else { setItem('id', 'error', 'Verification failed (' + (data.error || res.status) + ').'); idRetry(); }
+    }catch(err){
+      setItem('id', 'error', err.message || 'Verification failed.'); idRetry();
+    }
+  }
+
+  if(!HAS_REFERENCE && !ALLOW_FIRST_USE){
+    idBlocked = true;
+    setItem('id', 'error', 'No ID photo is registered for your account. Ask your instructor to register one (Admin → Students → Register photo).');
+    setAction('id', '');
+  }
+
+  // ---------------- begin exam ----------------
+  async function submitVerification(){
+    const btn = $('begin-btn'), errEl = $('server-error');
+    errEl.classList.remove('show'); btn.disabled = true; btn.textContent = 'Verifying…';
+    const body = new URLSearchParams();
+    body.set('face_ok', faceOk ? '1' : '0'); body.set('fullscreen_ok', fullscreenOk ? '1' : '0'); body.set('id_ok', idOk ? '1' : '0');
+    try{
+      const res = await fetch(VERIFY_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
+      const data = await res.json();
+      if(res.ok && data.ok){ stopStream(); window.location.href = data.redirect; return; }
+      errEl.textContent = data.error === 'identity_not_verified'
+        ? 'The server has not confirmed your identity yet — run the ID Photo Match again.'
+        : 'Verification incomplete — please complete all 3 checks and try again.';
+    }catch(err){ errEl.textContent = 'Could not reach the server. Please try again.'; }
+    errEl.classList.add('show'); btn.textContent = 'Begin Exam'; updateBeginButton();
+  }
+  window.addEventListener('beforeunload', stopStream);
+</script>
+</body>
+</html>

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProctorAI — Admin Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .app{ display:flex; min-height:100vh; }
+  .sidebar{ width:220px; background:var(--surface); border-right:1px solid var(--line); padding:22px 14px; display:flex; flex-direction:column; gap:26px; flex-shrink:0; }
+  nav.navlist{ display:flex; flex-direction:column; gap:2px; }
+  .navlist button{ all:unset; display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:8px; color:var(--text-muted); font-size:13.5px; font-weight:500; cursor:pointer; }
+  .navlist button svg{ width:17px; height:17px; flex-shrink:0; }
+  .navlist button:hover{ background:var(--surface-2); color:var(--text); }
+  .navlist button.active{ background:var(--surface-2); color:var(--text); }
+  .sidebar-foot{ margin-top:auto; display:flex; align-items:center; gap:10px; padding-top:16px; border-top:1px solid var(--line); }
+  .avatar-sm{ width:30px; height:30px; border-radius:50%; background:var(--surface-2); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:11.5px; }
+  .logout-link{ font-size:11px; color:var(--text-muted); text-decoration:none; }
+  .logout-link:hover{ color:var(--alert); }
+
+  .main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+  .topbar{ height:60px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:0 26px; background:rgba(18,26,44,.5); }
+  .topbar-title{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:17px; }
+  .content{ padding:26px 28px 60px; flex:1; overflow-y:auto; }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+  .section-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px; }
+  .section-head h2{ font-family:'Space Grotesk',sans-serif; font-size:19px; font-weight:600; }
+  .section-head p{ font-size:12.5px; color:var(--text-muted); margin-top:2px; }
+
+  .live-badge{ margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:10.5px; background:rgba(255,84,104,.15); color:var(--alert); border:1px solid rgba(255,84,104,.4); padding:1px 7px; border-radius:20px; }
+  .live-badge.zero{ background:var(--ink); color:var(--text-muted); border-color:var(--line); }
+  .live-chip{ display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--safe); background:rgba(47,224,176,.08); border:1px solid rgba(47,224,176,.3); padding:5px 11px; border-radius:20px; }
+  .live-dot{ width:6px; height:6px; border-radius:50%; background:var(--safe); animation:pulse 1.6s infinite; }
+  .live-dot-sm{ width:5px; height:5px; border-radius:50%; background:var(--safe); display:inline-block; margin-right:4px; animation:pulse 1.6s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+  .flash-banner{ display:flex; align-items:flex-start; gap:9px; margin-bottom:18px; padding:12px 14px; border-radius:10px; font-size:12.5px; }
+  .flash-banner.error{ background:rgba(255,84,104,.08); border:1px solid rgba(255,84,104,.3); color:var(--alert); }
+  .flash-banner.ok{ background:rgba(47,224,176,.08); border:1px solid rgba(47,224,176,.3); color:var(--safe); }
+  .flash-banner svg{ width:15px; height:15px; flex-shrink:0; margin-top:1px; }
+
+  .form-card{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; display:none; }
+  .form-card.open{ display:block; }
+  .form-card h3{ font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:600; margin-bottom:14px; }
+  .form-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .field label{ display:block; font-size:11px; color:var(--text-muted); margin-bottom:6px; }
+  .field input, .field select{ all:unset; box-sizing:border-box; width:100%; background:var(--ink); border:1px solid var(--line); border-radius:7px; padding:9px 11px; font-size:12.5px; color:var(--text); }
+  .field input:focus, .field select:focus{ border-color:var(--scan); }
+  .form-actions{ display:flex; gap:10px; margin-top:16px; }
+  .icon-btn-sm{ background:none; border:1px solid var(--line); border-radius:6px; padding:5px 9px; color:var(--text-muted); font-size:11px; cursor:pointer; text-decoration:none; }
+  .icon-btn-sm:hover{ color:var(--text); border-color:var(--scan); }
+
+  .photo-cell{ display:flex; align-items:center; gap:10px; }
+  .student-photo{ width:34px; height:34px; border-radius:50%; object-fit:cover; border:1px solid var(--line); flex-shrink:0; }
+  .student-photo.empty{ display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:11px; background:var(--ink); }
+  .photo-status{ position:fixed; bottom:20px; right:20px; max-width:340px; padding:12px 16px; border-radius:10px; font-size:12.5px; display:none; z-index:300; background:var(--surface); border:1px solid var(--line); box-shadow:0 4px 20px rgba(0,0,0,.35); }
+  .photo-status.show{ display:block; }
+  .photo-status.ok{ color:var(--safe); border-color:rgba(47,224,176,.4); }
+  .photo-status.bad{ color:var(--alert); border-color:rgba(255,84,104,.4); }
+  .photo-status.pending{ color:var(--text-muted); }
+
+  .branch-pills{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .branch-pill{
+    all:unset; cursor:pointer; display:flex; align-items:center; gap:7px;
+    font-size:12px; font-weight:500; color:var(--text-muted);
+    background:var(--surface); border:1px solid var(--line); border-radius:20px; padding:7px 14px;
+  }
+  .branch-pill:hover{ border-color:var(--scan); color:var(--text); }
+  .branch-pill.active{ background:var(--surface-2); border-color:var(--scan); color:var(--text); }
+  .pill-count{ font-family:'JetBrains Mono',monospace; font-size:10.5px; background:var(--ink); border:1px solid var(--line); padding:1px 7px; border-radius:20px; color:var(--text-muted); }
+  .branch-pill.active .pill-count{ color:var(--scan); border-color:var(--scan); }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark"></div><div><div class="brand-name">ProctorAI</div></div></div>
+    <nav class="navlist">
+      <button class="active" data-panel="live">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Live Now <span class="live-badge {{ 'zero' if live_sessions|length == 0 else '' }}" id="nav-live-count">{{ live_sessions|length }}</span>
+      </button>
+      <button data-panel="students"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>Students</button>
+      <button data-panel="exams"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h10l4 4v12H5z"/></svg>Exams</button>
+      <button data-panel="logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Activity Logs</button>
+      <button data-panel="results"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>Results</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="avatar-sm">{{ name[:2].upper() }}</div>
+      <div>
+        <div style="font-size:12.5px; font-weight:600;">{{ name }}</div>
+        <a class="logout-link" href="{{ url_for('logout') }}">Log out</a>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar"><div class="topbar-title" id="topbar-title">Live Now</div></div>
+    <div class="content">
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">Total Students</div><div class="kpi-value">{{ total_students }}</div></div>
+        <div class="kpi"><div class="kpi-label">Total Exams</div><div class="kpi-value">{{ exams|length }}</div></div>
+        <div class="kpi"><div class="kpi-label">Logged Violations</div><div class="kpi-value">{{ logs|length }}</div></div>
+        <div class="kpi"><div class="kpi-label">Flagged Results</div><div class="kpi-value alert">{{ flagged_count }}</div></div>
+      </div>
+
+      <!-- LIVE NOW -->
+      <section class="panel active" id="panel-live">
+        <div class="section-head">
+          <div><h2>Live Now</h2><p>Students currently sitting an exam, in real time</p></div>
+          <div class="live-chip"><span class="live-dot"></span><span id="live-refresh-label">auto-refreshing</span></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Student</th><th>Roll No</th><th>Exam</th><th>Started</th><th>Status</th></tr></thead>
+            <tbody id="live-tbody">
+              {% for s in live_sessions %}
+              <tr>
+                <td class="row-name">{{ s['student_name'] }}</td>
+                <td class="cell-mono">{{ s['roll_no'] }}</td>
+                <td>{{ s['exam_title'] }}</td>
+                <td class="cell-mono">{{ s['started_at'] }}</td>
+                <td><span class="badge safe"><span class="live-dot-sm"></span>In Progress</span></td>
+              </tr>
+              {% else %}
+              <tr id="live-empty-row"><td colspan="5" style="text-align:center; color:var(--text-muted);">No students are currently taking an exam.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- STUDENTS -->
+      <section class="panel" id="panel-students">
+        <div class="section-head">
+          <div><h2>Students</h2><p>Enrollment and identity verification status</p></div>
+          <button class="btn btn-primary" type="button" onclick="document.getElementById('student-form').classList.toggle('open')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+            Add Student
+          </button>
+        </div>
+
+        {% if get_flashed_messages() %}
+          {% for m in get_flashed_messages() %}
+          <div class="flash-banner {{ 'ok' if ('added successfully' in m or 'registered' in m) else 'error' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span>{{ m }}</span>
+          </div>
+          {% endfor %}
+        {% endif %}
+
+        <div class="form-card" id="student-form">
+          <h3 style="font-family:'Space Grotesk',sans-serif; font-size:14px; margin-bottom:14px;">Add a new student</h3>
+          <form method="POST" action="{{ url_for('admin_create_student') }}">
+            <div class="form-grid">
+              <div class="field"><label>Full name</label><input type="text" name="name" placeholder="e.g. R. Meghana" required></div>
+              <div class="field"><label>Roll number</label><input type="text" name="roll_no" placeholder="e.g. 23C31A05M1" required></div>
+              <div class="field">
+                <label>Branch / Batch</label>
+                <input type="text" name="batch" list="existing-branches" placeholder="e.g. CSE-3B" required>
+                <datalist id="existing-branches">
+                  {% for b in branches %}<option value="{{ b }}">{% endfor %}
+                </datalist>
+              </div>
+              <div class="field"><label>Email (optional)</label><input type="email" name="email" placeholder="student@cse.edu"></div>
+              <div class="field"><label>Initial password</label><input type="text" name="password" placeholder="Min. 6 characters" required></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Save Student</button>
+              <button type="button" class="btn btn-ghost" onclick="document.getElementById('student-form').classList.remove('open')">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="branch-pills" id="branch-pills">
+          <button type="button" class="branch-pill active" data-branch="all" onclick="filterByBranch('all', this)">All Branches <span class="pill-count">{{ students|length }}</span></button>
+          {% for b in branches %}
+          <button type="button" class="branch-pill" data-branch="{{ b }}" onclick="filterByBranch('{{ b }}', this)">{{ b }} <span class="pill-count">{{ students|selectattr('batch','equalto',b)|list|length }}</span></button>
+          {% endfor %}
+        </div>
+
+        <div class="card">
+          <table>
+            <thead><tr><th>Student</th><th>Roll No</th><th>Batch</th><th>Email</th><th>ID photo</th></tr></thead>
+            <tbody id="students-tbody">
+              {% for s in students %}
+              <tr data-batch="{{ s['batch'] }}">
+                <td class="row-name">{{ s['name'] }}</td>
+                <td class="cell-mono">{{ s['roll_no'] }}</td>
+                <td class="cell-mono">{{ s['batch'] }}</td>
+                <td class="cell-mono">{{ s['email'] }}</td>
+                <td>
+                  <div class="photo-cell">
+                    {% if s['photo_data'] %}<img class="student-photo" src="{{ s['photo_data'] }}" alt="ID photo of {{ s['name'] }}">{% else %}<div class="student-photo empty">—</div>{% endif %}
+                    <button type="button" class="icon-btn-sm" data-id="{{ s['id'] }}" data-name="{{ s['name'] }}" onclick="startPhotoUpload(this)">{{ 'Update photo' if s['photo_data'] else 'Register photo' }}</button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- EXAMS -->
+      <section class="panel" id="panel-exams">
+        <div class="section-head">
+          <div><h2>Exams</h2><p>All exams created for your batches</p></div>
+          <button class="btn btn-primary" type="button" onclick="document.getElementById('exam-form').classList.toggle('open')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+            New Exam
+          </button>
+        </div>
+
+        {% if get_flashed_messages() %}
+          {% for m in get_flashed_messages() %}
+          <div class="flash-banner {{ 'ok' if ('created successfully' in m or 'added successfully' in m or 'registered' in m) else 'error' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span>{{ m }}</span>
+          </div>
+          {% endfor %}
+        {% endif %}
+
+        <div class="form-card" id="exam-form">
+          <h3>Create a new exam</h3>
+          <form method="POST" action="{{ url_for('admin_create_exam') }}">
+            <div class="form-grid">
+              <div class="field"><label>Exam title</label><input type="text" name="title" placeholder="e.g. Data Structures — Mid Sem" required></div>
+              <div class="field"><label>Subject</label><input type="text" name="subject" placeholder="e.g. Data Structures"></div>
+              <div class="field">
+                <label>Branch / Batch</label>
+                <select name="batch" required>
+                  {% for b in branches %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="field"><label>Duration (minutes)</label><input type="number" name="duration_minutes" placeholder="60" required></div>
+              <div class="field"><label>Total marks</label><input type="number" name="total_marks" placeholder="100"></div>
+              <div class="field"><label>Scheduled date &amp; time</label><input type="datetime-local" name="scheduled_at" required></div>
+              <div class="field">
+                <label>Proctoring level</label>
+                <select name="proctoring_level">
+                  <option value="Full">Full (all 5 AI modules)</option>
+                  <option value="Standard">Standard (no audio)</option>
+                  <option value="Basic">Basic (face only)</option>
+                </select>
+              </div>
+              <div class="field"><label>Exam password</label><input type="text" name="exam_password" placeholder="Shared with students to join" required></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Save Exam</button>
+              <button type="button" class="btn btn-ghost" onclick="document.getElementById('exam-form').classList.remove('open')">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <table>
+            <thead><tr><th>Exam</th><th>Batch</th><th>Scheduled</th><th>Duration</th><th>Proctoring</th><th>Questions</th></tr></thead>
+            <tbody>
+              {% for e in exams %}
+              <tr>
+                <td><a href="{{ url_for('admin_exam_roster', exam_id=e['id']) }}" style="text-decoration:none; color:inherit;"><div class="row-name" style="text-decoration:underline; text-decoration-color:var(--line);">{{ e['title'] }}</div><div class="row-sub">{{ e['subject'] }}</div></a></td>
+                <td class="cell-mono">{{ e['batch'] }}</td>
+                <td class="cell-mono">{{ e['scheduled_at'] }}</td>
+                <td class="cell-mono">{{ e['duration_minutes'] }} min</td>
+                <td>{{ e['proctoring_level'] }}</td>
+                <td><a href="{{ url_for('admin_exam_questions', exam_id=e['id']) }}" class="icon-btn-sm">Manage</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- LOGS -->
+      <section class="panel" id="panel-logs">
+        <div class="section-head"><div><h2>Activity Logs</h2><p>Select an exam to view its violation history</p></div></div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Exam</th><th>Batch</th><th>Scheduled</th><th>Violations</th><th></th></tr></thead>
+            <tbody>
+              {% for e in exam_log_summary %}
+              <tr>
+                <td><div class="row-name">{{ e['title'] }}</div><div class="row-sub">{{ e['subject'] }}</div></td>
+                <td class="cell-mono">{{ e['batch'] }}</td>
+                <td class="cell-mono">{{ e['scheduled_at'] }}</td>
+                <td>
+                  {% if e['violation_count'] > 0 %}
+                    <span class="badge {{ 'alert' if e['high_count'] > 0 else 'warn' }}">{{ e['violation_count'] }} logged</span>
+                  {% else %}
+                    <span class="badge idle">None</span>
+                  {% endif %}
+                </td>
+                <td><a href="{{ url_for('admin_exam_logs', exam_id=e['id']) }}" class="icon-btn-sm">View Logs</a></td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No exams yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- RESULTS -->
+      <section class="panel" id="panel-results">
+        <div class="section-head"><div><h2>Results &amp; Analytics</h2><p>Scores combined with proctoring risk assessment</p></div></div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Student</th><th>Exam</th><th>Score</th><th>Risk Score</th><th>Violations</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for r in results %}
+              <tr>
+                <td class="row-name">{{ r['student_name'] }}</td>
+                <td>{{ r['exam_title'] }}</td>
+                <td class="cell-mono">{{ r['score'] }}/{{ r['total'] }}</td>
+                <td class="cell-mono">{{ r['risk_score'] }}</td>
+                <td class="cell-mono">{{ r['violations_count'] }}</td>
+                <td>{% if r['risk_score'] >= 50 %}<span class="badge alert">Review</span>{% elif r['risk_score'] >= 20 %}<span class="badge warn">Watch</span>{% else %}<span class="badge safe">Clear</span>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<input type="file" id="photo-input" accept="image/*" style="display:none">
+<div class="photo-status" id="photo-status"></div>
+
+<script>
+  const titles = { live:"Live Now", students:"Students", exams:"Exams", logs:"Activity Logs", results:"Results & Analytics" };
+  document.querySelectorAll('.navlist button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.navlist button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.panel;
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      document.getElementById('panel-'+target).classList.add('active');
+      document.getElementById('topbar-title').textContent = titles[target];
+    });
+  });
+
+  // Poll the server every 3 seconds for who is currently in an exam.
+  async function refreshLiveSessions(){
+    try{
+      const res = await fetch("{{ url_for('admin_live_sessions_api') }}");
+      const data = await res.json();
+
+      const badge = document.getElementById('nav-live-count');
+      badge.textContent = data.count;
+      badge.classList.toggle('zero', data.count === 0);
+
+      const tbody = document.getElementById('live-tbody');
+      if(data.count === 0){
+        tbody.innerHTML = '<tr id="live-empty-row"><td colspan="5" style="text-align:center; color:var(--text-muted);">No students are currently taking an exam.</td></tr>';
+      } else {
+        tbody.innerHTML = data.sessions.map(s => `
+          <tr>
+            <td class="row-name">${s.student_name}</td>
+            <td class="cell-mono">${s.roll_no}</td>
+            <td>${s.exam_title}</td>
+            <td class="cell-mono">${s.started_at}</td>
+            <td><span class="badge safe"><span class="live-dot-sm"></span>In Progress</span></td>
+          </tr>
+        `).join('');
+      }
+    }catch(err){ /* silent — keep last known state on network hiccup */ }
+  }
+  setInterval(refreshLiveSessions, 3000);
+
+  // ---------- Register a student's ID photo (face fingerprint is computed in this browser) ----------
+  const FACE_API_SRC = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js";
+  const FACE_MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
+  let faceModelsReady = false, photoTarget = null;
+
+  function loadScript(src){
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script'); s.src = src; s.onload = resolve;
+      s.onerror = () => reject(new Error('Could not load the face recognition library — check your internet connection.'));
+      document.head.appendChild(s);
+    });
+  }
+  async function ensureFaceApi(){
+    if(typeof faceapi === 'undefined') await loadScript(FACE_API_SRC);
+    if(!faceModelsReady){
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL),
+      ]);
+      faceModelsReady = true;
+    }
+  }
+  function showPhotoStatus(text, kind){
+    const el = document.getElementById('photo-status');
+    el.textContent = text; el.className = 'photo-status show ' + kind;
+  }
+  function startPhotoUpload(btn){
+    photoTarget = { id: btn.dataset.id, name: btn.dataset.name };
+    document.getElementById('photo-input').click();
+  }
+  document.getElementById('photo-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; e.target.value = '';
+    if(file && photoTarget) await registerPhoto(file, photoTarget);
+  });
+  function loadImage(file){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('That file could not be read as an image.'));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  function downscaleToJpeg(img, maxW){
+    const scale = Math.min(1, maxW / img.naturalWidth), c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.85);
+  }
+  async function registerPhoto(file, target){
+    try{
+      showPhotoStatus('Loading face recognition models…', 'pending');
+      await ensureFaceApi();
+      showPhotoStatus('Reading the photo for ' + target.name + '…', 'pending');
+      const img = await loadImage(file);
+      const dets = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
+                                .withFaceLandmarks().withFaceDescriptors();
+      if(dets.length === 0) throw new Error('No face found in that photo. Use a clear, front-facing photo.');
+      if(dets.length > 1) throw new Error('More than one face found. Use a photo with only the student.');
+      const res = await fetch('/admin/students/' + target.id + '/photo', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photo: downscaleToJpeg(img, 320), descriptor: Array.from(dets[0].descriptor) })
+      });
+      const data = await res.json();
+      if(!res.ok || !data.ok) throw new Error('The server rejected the photo (' + (data.error || res.status) + ').');
+      showPhotoStatus('Saved.', 'ok');
+      window.location.hash = '#students'; window.location.reload();
+    }catch(err){ showPhotoStatus(err.message || 'Something went wrong.', 'bad'); }
+  }
+
+  // Filter the Students table by branch/batch — pure client-side, no reload needed.
+  function filterByBranch(branch, clickedBtn){
+    document.querySelectorAll('.branch-pill').forEach(p => p.classList.remove('active'));
+    clickedBtn.classList.add('active');
+
+    document.querySelectorAll('#students-tbody tr').forEach(row => {
+      const matches = (branch === 'all') || (row.dataset.batch === branch);
+      row.style.display = matches ? '' : 'none';
+    });
+  }
+
+  // If redirected back with #exams (after creating an exam), open that panel automatically.
+  window.addEventListener('DOMContentLoaded', () => {
+    const hash = window.location.hash.replace('#', '');
+    if(hash && document.getElementById('panel-' + hash)){
+      document.querySelectorAll('.navlist button').forEach(b => b.classList.remove('active'));
+      document.querySelector(`.navlist button[data-panel="${hash}"]`).classList.add('active');
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('panel-' + hash).classList.add('active');
+      document.getElementById('topbar-title').textContent = titles[hash];
+
+      // If there's a flash message on the exams panel, keep the form open so errors are visible.
+      if(hash === 'exams' && document.querySelector('.flash-banner')){
+        document.getElementById('exam-form').classList.add('open');
+      }
+    }
+  });
+</script>
+</body>
+</html>

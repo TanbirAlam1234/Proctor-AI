@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProctorAI — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  body{ display:flex; align-items:center; justify-content:center; padding:24px; position:relative; overflow:hidden; }
+  body::before{ content:""; position:absolute; inset:0;
+    background:radial-gradient(circle at 15% 20%, rgba(79,195,247,.08), transparent 40%),
+               radial-gradient(circle at 85% 80%, rgba(47,224,176,.06), transparent 40%);
+    pointer-events:none; }
+  .wrap{ width:100%; max-width:400px; position:relative; z-index:1; }
+  .brand{ justify-content:center; margin-bottom:26px; }
+  .card{ padding:10px; }
+  .role-toggle{ display:flex; gap:4px; background:var(--ink); border:1px solid var(--line); border-radius:9px; padding:4px; margin:10px 10px 22px; }
+  .role-btn{ all:unset; flex:1; text-align:center; padding:10px 0; border-radius:6px; font-weight:600; font-size:12.5px; color:var(--text-muted); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; }
+  .role-btn.active{ background:var(--surface-2); color:var(--text); }
+  .role-btn.active.admin-active{ color:var(--scan); }
+  .role-btn.active.student-active{ color:var(--safe); }
+  .card-inner{ padding:0 20px 22px; }
+  .form-title{ font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:600; }
+  .form-sub{ font-size:12px; color:var(--text-muted); margin-top:4px; margin-bottom:20px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:11px; color:var(--text-muted); margin-bottom:6px; }
+  .field input{ all:unset; width:100%; background:var(--ink); border:1px solid var(--line); border-radius:8px; padding:11px 13px; font-size:13px; color:var(--text); }
+  .field input:focus{ border-color:var(--scan); }
+  .auth-error{ display:flex; align-items:flex-start; gap:9px; margin-bottom:16px; padding:11px 12px; background:rgba(255,84,104,.08); border:1px solid rgba(255,84,104,.3); border-radius:8px; color:var(--alert); font-size:12px; line-height:1.5; }
+  .auth-error svg{ width:15px; height:15px; flex-shrink:0; margin-top:1px; }
+  .note{ display:flex; gap:9px; align-items:flex-start; margin-top:16px; padding:11px 12px; border-radius:8px; background:rgba(79,195,247,.06); border:1px solid rgba(79,195,247,.25); }
+  .note svg{ width:14px; height:14px; color:var(--scan); flex-shrink:0; margin-top:1px; }
+  .note p{ font-size:11px; color:var(--text-muted); line-height:1.5; }
+  .foot-note{ text-align:center; font-size:11px; color:var(--text-muted); margin-top:18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><div class="brand-mark"></div><div class="brand-name">ProctorAI</div></div>
+
+  <div class="card">
+    <div class="role-toggle">
+      <button type="button" class="role-btn {{ 'active admin-active' if role != 'student' else '' }}" id="tab-admin" onclick="setRole('admin')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Admin / Teacher
+      </button>
+      <button type="button" class="role-btn {{ 'active student-active' if role == 'student' else '' }}" id="tab-student" onclick="setRole('student')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
+        Student
+      </button>
+    </div>
+
+    <div class="card-inner">
+      <div class="form-title" id="form-title">{{ 'Student Sign In' if role == 'student' else 'Admin Sign In' }}</div>
+      <div class="form-sub" id="form-sub">{{ 'Sign in to view and take your exams' if role == 'student' else 'Access the proctoring control console' }}</div>
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <div class="auth-error">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span>{{ messages[0] }}</span>
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('login') }}">
+        <input type="hidden" name="role" id="role-input" value="{{ role }}">
+
+        <div class="field">
+          <label id="id-label">{{ 'Roll number / Email' if role == 'student' else 'Name / Email' }}</label>
+          <input type="text" name="identifier" id="id-input" value="{{ identifier }}" placeholder="{{ '23C31A05F3' if role == 'student' else 'admin@institution.edu' }}">
+        </div>
+
+        <div class="field">
+          <label>Password</label>
+          <input type="password" name="password" placeholder="Enter your password">
+        </div>
+
+        <button type="submit" class="btn {{ 'btn-safe' if role == 'student' else 'btn-primary' }} btn-block" id="submit-btn">
+          {{ 'Sign In as Student' if role == 'student' else 'Sign In as Admin' }}
+        </button>
+      </form>
+
+      <div class="note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3"/><path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+        <p id="note-text">{{ "After signing in, we'll verify your face before the exam unlocks." if role == 'student' else 'Admins get access to Live Monitoring, Exams, Logs, and Results.' }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot-note">Demo logins — Admin: admin@proctorai.edu / admin123 &nbsp;·&nbsp; Student: 23C31A05F3 / student123</div>
+</div>
+
+<script>
+  function setRole(role){
+    document.getElementById('role-input').value = role;
+    document.getElementById('tab-admin').classList.toggle('active', role==='admin');
+    document.getElementById('tab-admin').classList.toggle('admin-active', role==='admin');
+    document.getElementById('tab-student').classList.toggle('active', role==='student');
+    document.getElementById('tab-student').classList.toggle('student-active', role==='student');
+
+    document.getElementById('form-title').textContent = role==='student' ? 'Student Sign In' : 'Admin Sign In';
+    document.getElementById('form-sub').textContent = role==='student' ? 'Sign in to view and take your exams' : 'Access the proctoring control console';
+    document.getElementById('id-label').textContent = role==='student' ? 'Roll number / Email' : 'Name / Email';
+    document.getElementById('id-input').placeholder = role==='student' ? '23C31A05F3' : 'admin@institution.edu';
+    document.getElementById('note-text').textContent = role==='student' ? "After signing in, we'll verify your face before the exam unlocks." : 'Admins get access to Live Monitoring, Exams, Logs, and Results.';
+
+    const btn = document.getElementById('submit-btn');
+    btn.textContent = role==='student' ? 'Sign In as Student' : 'Sign In as Admin';
+    btn.className = 'btn btn-block ' + (role==='student' ? 'btn-safe' : 'btn-primary');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProctorAI — Student Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .topbar{ height:64px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:0 28px; background:rgba(18,26,44,.5); }
+  .content{ padding:28px; max-width:1100px; margin:0 auto; }
+  .avatar-sm{ width:32px; height:32px; border-radius:50%; background:var(--surface-2); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:12px; }
+  .topbar-right{ display:flex; align-items:center; gap:14px; }
+  .logout-link{ font-size:12px; color:var(--text-muted); text-decoration:none; }
+  .logout-link:hover{ color:var(--alert); }
+
+  .welcome{ margin-bottom:24px; }
+  .welcome h1{ font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:600; }
+  .welcome p{ font-size:12.5px; color:var(--text-muted); margin-top:4px; }
+
+  /* Attendance ring */
+  .attend-card{ display:flex; align-items:center; gap:20px; }
+  .ring-wrap{ position:relative; width:74px; height:74px; flex-shrink:0; }
+  .ring-wrap svg{ width:100%; height:100%; transform:rotate(-90deg); }
+  .ring-bg{ fill:none; stroke:var(--line); stroke-width:8; }
+  .ring-fg{ fill:none; stroke:var(--safe); stroke-width:8; stroke-linecap:round; transition:stroke-dashoffset .6s ease; }
+  .ring-label{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:600; font-size:15px; }
+
+  .section-head{ display:flex; align-items:baseline; justify-content:space-between; margin:32px 0 14px; }
+  .section-head h2{ font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:600; }
+  .section-head p{ font-size:12px; color:var(--text-muted); margin-top:2px; }
+
+  .test-list{ display:flex; flex-direction:column; gap:10px; }
+  .test-row{ background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 18px; display:flex; align-items:center; gap:16px; }
+  .test-icon{ width:38px; height:38px; border-radius:8px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .test-icon svg{ width:18px; height:18px; color:var(--scan); }
+  .test-info{ flex:1; min-width:0; }
+  .test-title{ font-weight:600; font-size:13.5px; }
+  .test-sub{ font-size:11.5px; color:var(--text-muted); margin-top:2px; font-family:'JetBrains Mono',monospace; }
+  .test-score{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; text-align:right; }
+  .test-score-label{ font-size:10px; color:var(--text-muted); text-align:right; margin-top:1px; }
+
+  .empty-state{ text-align:center; padding:30px; color:var(--text-muted); font-size:12.5px; background:var(--surface); border:1px dashed var(--line); border-radius:10px; }
+
+  .flash-banner{ display:flex; align-items:flex-start; gap:9px; margin-bottom:20px; padding:12px 14px; background:rgba(255,84,104,.08); border:1px solid rgba(255,84,104,.3); border-radius:10px; color:var(--alert); font-size:12.5px; }
+  .flash-banner svg{ width:16px; height:16px; flex-shrink:0; margin-top:1px; }
+
+  .today-card{
+    display:flex; align-items:center; gap:18px; margin-bottom:32px;
+    background:linear-gradient(135deg, rgba(47,224,176,.08), rgba(79,195,247,.05));
+    border:1px solid rgba(47,224,176,.3); border-radius:14px; padding:18px 22px;
+  }
+  .today-badge{ display:flex; align-items:center; gap:6px; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; color:var(--safe); background:rgba(47,224,176,.12); border:1px solid rgba(47,224,176,.4); padding:6px 12px; border-radius:20px; flex-shrink:0; }
+  .live-dot{ width:6px; height:6px; border-radius:50%; background:var(--safe); animation:pulse 1.6s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  .today-main{ flex:1; min-width:0; }
+  .today-title{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; }
+  .today-sub{ font-size:11.5px; color:var(--text-muted); margin-top:3px; font-family:'JetBrains Mono',monospace; }
+  .today-actions{ display:flex; gap:10px; flex-shrink:0; }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="brand"><div class="brand-mark"></div><div class="brand-name">ProctorAI</div></div>
+    <div class="topbar-right">
+      <div class="avatar-sm">{{ student['name'][:2].upper() }}</div>
+      <div>
+        <div style="font-size:12.5px; font-weight:600;">{{ student['name'] }}</div>
+        <div style="font-size:10.5px; color:var(--text-muted);">{{ student['roll_no'] }} · {{ student['batch'] }}</div>
+      </div>
+      <a class="logout-link" href="{{ url_for('logout') }}">Log out</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="welcome">
+      <h1>Welcome back, {{ student['name'].split(' ')[0] }}</h1>
+      <p>Here's where things stand with your exams</p>
+    </div>
+
+    <!-- ===== KPI ROW ===== -->
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-label">Tests Attended</div>
+        <div class="kpi-value">{{ attended_count }} <span style="font-size:14px; color:var(--text-muted);">/ {{ total_assigned }}</span></div>
+        <div class="kpi-delta">Total assigned to your batch</div>
+      </div>
+
+      <div class="kpi attend-card">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 80 80">
+            <circle class="ring-bg" cx="40" cy="40" r="32"></circle>
+            <circle class="ring-fg" cx="40" cy="40" r="32"
+              stroke-dasharray="{{ 201 }}"
+              stroke-dashoffset="{{ 201 - (201 * attendance_pct / 100) }}"></circle>
+          </svg>
+          <div class="ring-label">{{ attendance_pct }}%</div>
+        </div>
+        <div>
+          <div class="kpi-label">Attendance</div>
+          <div class="kpi-delta" style="margin-top:6px;">{{ attended_count }} of {{ total_assigned }} tests taken</div>
+        </div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-label">Upcoming Tests</div>
+        <div class="kpi-value safe">{{ upcoming|length }}</div>
+        <div class="kpi-delta">Scheduled ahead</div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-label">Average Score</div>
+        <div class="kpi-value">{{ avg_score_pct }}%</div>
+        <div class="kpi-delta">Across attended tests</div>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash-banner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+          <span>{{ messages[0] }}</span>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- ===== TODAY'S EXAM ===== -->
+    {% if today_exam %}
+    <div class="today-card">
+      <div class="today-badge"><span class="live-dot"></span>TODAY</div>
+      <div class="today-main">
+        <div class="today-title">{{ today_exam['title'] }}</div>
+        <div class="today-sub">{{ today_exam['subject'] }} · {{ today_exam['scheduled_at'] }} · {{ today_exam['duration_minutes'] }} min · {{ today_exam['proctoring_level'] }} proctoring</div>
+      </div>
+      <div class="today-actions">
+        <a href="{{ url_for('exam_details', exam_id=today_exam['id']) }}" class="btn btn-ghost">View Details</a>
+        <a href="{{ url_for('exam_details', exam_id=today_exam['id']) }}" class="btn btn-safe">Join Today's Exam</a>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ===== UPCOMING TESTS ===== -->
+    <div class="section-head">
+      <div><h2>Upcoming Tests</h2><p>Exams scheduled for your batch that you haven't taken yet</p></div>
+    </div>
+    <div class="test-list">
+      {% for exam in upcoming %}
+      <div class="test-row">
+        <div class="test-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+        </div>
+        <div class="test-info">
+          <div class="test-title">{{ exam['title'] }}</div>
+          <div class="test-sub">{{ exam['scheduled_at'] }} · {{ exam['duration_minutes'] }} min · {{ exam['proctoring_level'] }} proctoring</div>
+        </div>
+        <a href="{{ url_for('exam_details', exam_id=exam['id']) }}" class="btn btn-primary" style="padding:9px 16px; font-size:12px;">View Details</a>
+      </div>
+      {% else %}
+      <div class="empty-state">No upcoming tests right now — check back later.</div>
+      {% endfor %}
+    </div>
+
+    <!-- ===== ATTENDED TESTS ===== -->
+    <div class="section-head">
+      <div><h2>Attended Tests</h2><p>Your submitted exams and results</p></div>
+    </div>
+    <div class="test-list">
+      {% for r in results %}
+      <div class="test-row">
+        <div class="test-icon" style="background:rgba(47,224,176,.1);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#2FE0B0" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <div class="test-info">
+          <div class="test-title">{{ r['title'] }}</div>
+          <div class="test-sub">{{ r['subject'] }} · Submitted {{ r['submitted_at'] }}</div>
+        </div>
+        <div>
+          <div class="test-score">{{ r['score'] }}/{{ r['total'] }}</div>
+          <div class="test-score-label">{{ ((r['score']/r['total'])*100)|round|int }}%</div>
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state">You haven't attended any tests yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProctorAI — Logs — {{ exam['title'] }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .topbar{ height:60px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:0 28px; }
+  .back-link{ font-size:12.5px; color:var(--text-muted); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .back-link:hover{ color:var(--text); }
+  .content{ padding:32px 28px; max-width:920px; margin:0 auto; }
+
+  .head{ margin-bottom:24px; }
+  .eyebrow{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--scan); letter-spacing:.05em; }
+  .head h1{ font-family:'Space Grotesk',sans-serif; font-size:21px; font-weight:600; margin-top:6px; }
+  .head p{ font-size:12px; color:var(--text-muted); margin-top:4px; }
+
+  .evidence-thumb{
+    width:44px; height:32px; border-radius:5px; object-fit:cover;
+    border:1px solid var(--line); cursor:pointer; display:block;
+  }
+  .evidence-thumb:hover{ border-color:var(--scan); }
+  .no-evidence{ font-size:11px; color:var(--text-muted); }
+
+  /* Lightbox for viewing a snapshot full-size */
+  .lightbox{
+    display:none; position:fixed; inset:0; background:rgba(5,8,16,.85); backdrop-filter:blur(3px);
+    align-items:center; justify-content:center; z-index:200; cursor:zoom-out;
+  }
+  .lightbox.open{ display:flex; }
+  .lightbox img{ max-width:88vw; max-height:82vh; border-radius:10px; border:1px solid var(--line); }
+  .lightbox-caption{ position:absolute; bottom:36px; left:0; right:0; text-align:center; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-muted); }
+
+  .empty-state{ text-align:center; padding:30px; color:var(--text-muted); font-size:12.5px; background:var(--surface); border:1px dashed var(--line); border-radius:10px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><div class="brand-mark"></div><div class="brand-name">ProctorAI</div></div>
+    <a class="back-link" href="{{ url_for('admin_dashboard', _anchor='logs') }}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Back to Activity Logs
+    </a>
+  </div>
+
+  <div class="content">
+    <div class="head">
+      <div class="eyebrow">ACTIVITY LOG</div>
+      <h1>{{ exam['title'] }}</h1>
+      <p>{{ logs|length }} violation{{ 's' if logs|length != 1 else '' }} logged for this exam</p>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">High Severity</div><div class="kpi-value alert">{{ logs|selectattr('severity','equalto','High')|list|length }}</div></div>
+      <div class="kpi"><div class="kpi-label">Medium Severity</div><div class="kpi-value" style="color:var(--warn);">{{ logs|selectattr('severity','equalto','Medium')|list|length }}</div></div>
+      <div class="kpi"><div class="kpi-label">Low Severity</div><div class="kpi-value safe">{{ logs|selectattr('severity','equalto','Low')|list|length }}</div></div>
+      <div class="kpi"><div class="kpi-label">Total Events</div><div class="kpi-value">{{ logs|length }}</div></div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Student</th><th>Module</th><th>Event</th><th>Severity</th><th>Timestamp</th><th>Evidence</th></tr></thead>
+        <tbody>
+          {% for l in logs %}
+          <tr>
+            <td><div class="row-name">{{ l['student_name'] }}</div><div class="row-sub">{{ l['roll_no'] }}</div></td>
+            <td class="cell-mono">{{ l['module'] }}</td>
+            <td>{{ l['event'] }}</td>
+            <td><span class="badge {{ 'alert' if l['severity']=='High' else ('warn' if l['severity']=='Medium' else 'safe') }}">{{ l['severity'] }}</span></td>
+            <td class="cell-mono">{{ l['timestamp'] }}</td>
+            <td>
+              {% if l['snapshot_data'] %}
+                <img class="evidence-thumb" src="{{ l['snapshot_data'] }}" onclick="openLightbox('{{ l['snapshot_data'] }}', '{{ l['student_name'] }} — {{ l['timestamp'] }}')">
+              {% else %}
+                <span class="no-evidence">No image</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6"><div class="empty-state">No violations logged for this exam yet.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="Violation evidence">
+    <div class="lightbox-caption" id="lightbox-caption"></div>
+  </div>
+
+<script>
+  function openLightbox(src, caption){
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('lightbox-caption').textContent = caption;
+    document.getElementById('lightbox').classList.add('open');
+  }
+  function closeLightbox(){
+    document.getElementById('lightbox').classList.remove('open');
+  }
+</script>
+</body>
+</html>
